@@ -26,6 +26,8 @@ import signal
 import sys
 import time
 import uuid
+import threading
+from aiohttp import web
 from typing import Dict, Optional
 
 # Load .env file if present
@@ -434,6 +436,19 @@ class DiscordBadgeTracker:
         if self.session and not self.session.closed:
             await self.session.close()
 
+async def health_check(request):
+    return web.Response(text="Bot is alive")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"[*] Web server running on port {port}")
+
 
 # â”€â”€ Standalone CLI Runner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async def main():
@@ -451,6 +466,7 @@ async def main():
         print("Example: DISCORD_COOKIE=\"__dcfduid=X; __sdcfduid=X; cf_clearance=X; locale=en-GB\"")
         return
 
+    await start_web_server()
     # Choose game name from CLI args or default to Grand Theft Auto V
     game = sys.argv[1] if len(sys.argv) > 1 else "Grand Theft Auto V"
 
