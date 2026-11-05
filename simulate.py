@@ -436,6 +436,81 @@ class DiscordBadgeTracker:
         if self.session and not self.session.closed:
             await self.session.close()
 
+async def start_discord_listener(tracker: DiscordBadgeTracker, token: str):
+    """Connects to the Discord Gateway to listen for .cookie and .new commands."""
+    gateway_url = "wss://gateway.discord.gg/?v=9&encoding=json"
+    
+    # We must identify to receive our own messages
+    payload = {
+        "op": 2,
+        "d": {
+            "token": token,
+            "properties": {"$os": "windows", "$browser": "chrome", "$device": ""},
+            "compress": False
+        }
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(gateway_url) as ws:
+            # Receive HELLO
+            hello = await ws.receive_json()
+            heartbeat_interval = hello["d"]["heartbeat_interval"] / 1000
+
+            # Start heartbeat loop in background
+            async def heartbeat():
+                while True:
+                    await asyncio.sleep(heartbeat_interval)
+                    await ws.send_json({"op": 1, "d": None})
+            
+            hb_task = asyncio.create_task(heartbeat())
+            
+            # Send IDENTIFY
+            await ws.send_json(payload)
+
+            # Listen for messages
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    data = msg.json()
+                    
+                    if data.get("op") == 0 and data.get("t") == "MESSAGE_CREATE":
+                        content = data["d"].get("content", "").strip()
+                        channel_id = data["d"]["channel_id"]
+
+                        # Command: .cookie
+                        if content == ".cookie":
+                            if tracker.hb_task and not tracker.hb_task.done():
+                                # It's working
+                                elapsed = (time.time() - tracker.start_ts) / 3600
+                                status = f" ACTIVE. Farming `{tracker.game_name}` for {elapsed:.2f} hours."
+                            else:
+                                # Not working
+                                status = " STOPPED. The bot is not sending heartbeats."
+                            
+                            await session.post(
+                                f"https://discord.com/api/v9/channels/{channel_id}/messages",
+                                headers={"Authorization": token},
+                                json={"content": status}
+                            )
+
+                        # Command: .new <cookie>
+                        elif content.startswith(".new "):
+                            new_cookie = content[5:].strip()
+                            if new_cookie:
+                                tracker.cookie = new_cookie
+                                # Restart the game session with the new cookie
+                                await tracker.stop_game()
+                                await tracker.start_game(tracker.game_name)
+                                await session.post(
+                                    f"https://discord.com/api/v9/channels/{channel_id}/messages",
+                                    headers={"Authorization": token},
+                                    json={"content": " Cookie updated. Restarting session..."}
+                                )
+
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    break
+            
+            hb_task.cancel()
+
 async def health_check(request):
     return web.Response(text="Bot is alive")
 
@@ -467,10 +542,13 @@ async def main():
         return
 
     await start_web_server()
+    
     # Choose game name from CLI args or default to Grand Theft Auto V
     game = sys.argv[1] if len(sys.argv) > 1 else "Grand Theft Auto V"
 
     tracker = DiscordBadgeTracker(token, cookie)
+
+    asyncio.create_task(start_discord_listener(tracker, token))
 
     # Handle graceful exit on Ctrl+C
     loop = asyncio.get_running_loop()
