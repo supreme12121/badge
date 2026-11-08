@@ -1,22 +1,3 @@
-"""
-DISCORD BADGE / GAME TIME TELEMETRY TRACKER (STANDALONE SCRIPT)
-================================================================
-This script is a fully functional, self-contained standalone implementation
-extracted from cele.py. It can run independently without discord.py or selfbot logic.
-
-Features:
-1. Connects to Discord's `/science` telemetry endpoint.
-2. Automatically queries Discord's detectable games library to resolve game names
-   to valid Application IDs and official Win32 executable names.
-3. Automatically retrieves an analytics token using your user token.
-4. Manages the complete game session lifecycle:
-   - Initial Session Open (`running_game_heartbeat` + `launch_game`)
-   - 120-second Heartbeat loop (`running_game_heartbeat`)
-   - Clean Session Close on shutdown / game switch (`final_heartbeat=True`)
-5. Respects Discord's minimum session length (>= 60s).
-6. Reads user token and cookies from environment variables or .env file.
-"""
-
 import asyncio
 import aiohttp
 import base64
@@ -514,16 +495,6 @@ async def start_discord_listener(tracker: DiscordBadgeTracker, token: str):
 async def health_check(request):
     return web.Response(text="Bot is alive")
 
-async def start_web_server():
-    app = web.Application()
-    app.router.add_get('/', health_check)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    print(f"[*] Web server running on port {port}")
-
 
 # â”€â”€ Standalone CLI Runner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async def main():
@@ -531,7 +502,7 @@ async def main():
     if not token:
         print(" TOKEN environment variable not set.")
         exit(1)
-    cookie = "CtZE08rLCLAtnWBhg09l5HB4UUeHQydlSrRdTud21RO0aWqvDh5-X7FGRxILs2xQeNu_OVqV8u3LGI6wkPwW3iYLku6dvkZhQyXIrfVm2XbPUYisJOh2uI5KEZVGCnJFJmZboQA4aSCf3rajX-3z5ovqWRS0Oqx69PRm29c4eu_pvPW9R86HlyzQirekQgMtae-zbRdzg9O6BZ1xwCmYUz8n709VFGq0avi0sJDKsD8EOp4CHz47diAv_Ay2eF8NTNLgUHmJ0cI9r4xWXPgUqRNbqJ0D8qilXNeIVtROga8YqA"
+    cookie = "Cskzw45-KmQzV14m4vyi1h-r89HAjxJKby6Q3IAf1gxcVZO5Xb1FruFEv8s6vR1Ngk9lggnfS_8h9MuefqNsiE4JUxP7sreG8NTCf51qmIzxBWyct0UDtujknbYTY87mUz0j8xkDqs2JztQOyYkj_-Ma4tOU-MwyXBINf0eycwMos8UoKnG2J6b5c3nwLkANsHJJVFAT_kRdCmKBWM-t6NU0UKvaOsaND9pFjfEghtKAIeieYZ8-4j_2k-OZx_12DrPprKukGQ7Iwhn1Md1lFsghmebxV9laJ5RP2g3nvpd0fg"
 
     if not token:
         print("ERROR: USER_TOKEN is required. Set it in .env or environment.")
@@ -540,8 +511,6 @@ async def main():
         print("ERROR: DISCORD_COOKIE is required. Set it in .env or environment.")
         print("Example: DISCORD_COOKIE=\"__dcfduid=X; __sdcfduid=X; cf_clearance=X; locale=en-GB\"")
         return
-
-    await start_web_server()
     
     # Choose game name from CLI args or default to Grand Theft Auto V
     game = sys.argv[1] if len(sys.argv) > 1 else "Grand Theft Auto V"
